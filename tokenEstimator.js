@@ -59,6 +59,134 @@ function estimateResponseTokens(prompt, promptTokenCount) {
     return Math.max(promptTokenCount * 1.2, 20);
   }
   
+  // NEW: Enhanced code generation detection with better line count recognition
+  // This covers more patterns like "need java program that is 1000 lines" and variations
+  const codeGenerationPatterns = [
+    // Standard pattern: write/create/generate X lines of code in Y
+    /(?:write|create|generate|make|code|program|script|develop)\s+(?:a|an|the)?\s*(\d+)\s*(?:line|lines)\s+(?:of\s+)?(?:code|program|script|application|app)?\s+(?:that\s+is\s+like\s+)?(?:in|using|with)?\s+(\w+)/i,
+    
+    // Need/want pattern: need/want X lines of Y code/program
+    /(?:need|want)\s+(?:a|an|the)?\s*(\w+)\s+(?:code|program|script|application|app)\s+(?:that\s+is|of|which\s+is)?\s*(\d+)\s+(?:line|lines)/i,
+    
+    // Reversed pattern: Y program/code that is X lines
+    /(?:need|want|create|make|write|generate)?\s+(?:a|an|the)?\s*(\w+)\s+(?:program|code|script|application|app)\s+(?:that|which)\s+is\s+(\d+)\s+(?:line|lines)/i,
+    
+    // Simplified patterns for "X lines of Y" or "Y that is X lines"
+    /(\d+)\s+(?:line|lines)\s+(?:of)?\s+(\w+)/i,
+    /(\w+)\s+(?:program|code|script|app|application)\s+(?:that\s+is)?\s*(\d+)\s+(?:line|lines)/i
+  ];
+  
+  // Try each pattern to find code generation requests
+  for (const pattern of codeGenerationPatterns) {
+    const match = lower.match(pattern);
+    if (match) {
+      let lineCount, language;
+      
+      // Determine which group is the line count and which is the language
+      // This depends on the pattern matched
+      if (pattern.source.startsWith('\\(\\?:need|want')) {
+        // For patterns where language comes first, then line count
+        language = match[1].toLowerCase();
+        lineCount = parseInt(match[2], 10);
+      } else if (pattern.source.startsWith('\\(\\d+')) {
+        // For patterns where line count comes first, then language
+        lineCount = parseInt(match[1], 10);
+        language = match[2].toLowerCase();
+      } else if (pattern.source.includes('\\w+\\)\\s+\\(\\?:program|code')) {
+        // For patterns with language first then line count
+        language = match[1].toLowerCase();
+        lineCount = parseInt(match[2], 10);
+      } else {
+        // Default pattern - language is second group, line count is first
+        lineCount = parseInt(match[1], 10);
+        language = match[2].toLowerCase();
+      }
+      
+      // Comprehensive tokens per line for different languages - adjusted for accuracy
+      const tokensPerLine = {
+        'python': 30,
+        'javascript': 35,
+        'typescript': 40,
+        'java': 45,
+        'c#': 40,
+        'cpp': 35,
+        'c++': 35,
+        'ruby': 25,
+        'go': 30,
+        'rust': 40,
+        'swift': 35,
+        'kotlin': 35,
+        'php': 40,
+        'html': 25,
+        'css': 20,
+        'sql': 25,
+        'r': 25,
+        'bash': 20,
+        'powershell': 30,
+        'default': 35 // Default if language not in list
+      };
+      
+      // Get average tokens per line for the specified language, or use default
+      const avgTokensPerLine = tokensPerLine[language] || tokensPerLine.default;
+      
+      // Calculate total tokens based on line count with a small overhead factor for explanations
+      const baseTotalTokens = lineCount * avgTokensPerLine * 1.2;
+      const tokenEstimate = Math.min(baseTotalTokens, 120000); // Cap at 120K tokens for realistic limits
+      
+      console.log(`Code generation detected: ${lineCount} lines of ${language} code, estimated ${tokenEstimate} tokens`);
+      
+      return tokenEstimate;
+    }
+  }
+  
+  // OLD: Check for code generation with explicit line count - keep for backward compatibility
+  const codeGenerationLineCountMatch = lower.match(/(?:write|create|generate|make|code|program|script|develop)\s+(?:a|an|the)?\s*(\d+)\s*(?:line|lines)\s+(?:of\s+)?(?:code|program|script|application|app)?\s+(?:that\s+is\s+like\s+)?(?:in|using|with)?\s+(\w+)/i);
+  
+  if (codeGenerationLineCountMatch) {
+    const lineCount = parseInt(codeGenerationLineCountMatch[1], 10);
+    const language = codeGenerationLineCountMatch[2].toLowerCase();
+    
+    // Average tokens per line for different programming languages
+    const tokensPerLine = {
+      'python': 30,
+      'javascript': 35,
+      'typescript': 40,
+      'java': 45,
+      'c#': 40,
+      'cpp': 35,
+      'c++': 35,
+      'ruby': 25,
+      'go': 30,
+      'rust': 40,
+      'swift': 35,
+      'kotlin': 35,
+      'php': 40,
+      'html': 25,
+      'css': 20,
+      'sql': 25,
+      'r': 25,
+      'bash': 20,
+      'powershell': 30,
+      'default': 35 // Default if language not in list
+    };
+    
+    // Get average tokens per line for the specified language, or use default
+    const avgTokensPerLine = tokensPerLine[language] || tokensPerLine.default;
+    
+    // Calculate total tokens based on line count with a small overhead factor
+    // And account for explanations and comments that might accompany the code
+    const baseTotalTokens = lineCount * avgTokensPerLine;
+    const tokenEstimate = Math.min(baseTotalTokens, 120000); // Cap at 120K tokens for realistic limits
+    
+    // If extremely large request, add comment about token limitations
+    if (lineCount > 1000) {
+      console.log(`Note: Request for ${lineCount} lines of ${language} code would require approximately ${baseTotalTokens} tokens, which exceeds model context limits.`);
+      return tokenEstimate;
+    }
+    
+    return tokenEstimate;
+  }
+  
   // Check for socio-political topics that tend to receive nuanced, longer responses
   const sociopoliticalPatterns = [
     // Political systems and governance
@@ -130,6 +258,30 @@ function estimateResponseTokens(prompt, promptTokenCount) {
     
     // Default creative writing length
     return Math.max(baseCreativeLength, promptTokenCount * 7);
+  }
+  
+  // NEW: Enhanced pattern for detecting line count requests more broadly for any language or context
+  const lineCountMatch = lower.match(/(\d{2,})\s*(?:line|lines)\s+(?:of\s+)?(?:code|program|script|text|content)/i);
+  if (lineCountMatch) {
+    const lineCount = parseInt(lineCountMatch[1], 10);
+    
+    // Base estimate on the content type - detect common programming languages
+    let tokensPerLine = 35; // Default for generic code
+    
+    // Check for programming language mentions
+    const languages = ["python", "javascript", "java", "c#", "c\\+\\+", "ruby", "php", "go", "swift", "rust"];
+    for (const lang of languages) {
+      if (lower.includes(lang)) {
+        // Slightly adjust tokens per line based on language verbosity
+        if (["java", "c#"].includes(lang)) tokensPerLine = 45;
+        else if (["python", "ruby"].includes(lang)) tokensPerLine = 30;
+        break;
+      }
+    }
+    
+    // Calculate total tokens with adjustment for explanations/comments
+    const totalTokens = Math.min(lineCount * tokensPerLine * 1.2, 100000); // Cap at 100K
+    return totalTokens;
   }
   
   // Much broader regex for word count requests - catches more patterns

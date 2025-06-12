@@ -1,7 +1,7 @@
 {
   "name": "prompt-energy-calculator",
   "version": "1.0.0",
-  "description": "Converts GPT-4 prompts to estimated kWh energy usage",
+  "description": "Converts GPT-4 prompts to estimated kWh energy usage and water consumption",
   "main": "index.js",
   "type": "module",
   "scripts": {

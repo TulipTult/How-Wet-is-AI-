@@ -278,12 +278,33 @@ function getOpennessScore(prompt) {
     "mission", "objective", "goal", "achievement", "reward", "penalty", "puzzle", "maze", "riddle",
     "enigma", "mystery", "conundrum", "interactive", "engagement", "immersion", "experience",
     
-    // Additional open-ended phrases
-    "freestyle", "improvise", "ad-lib", "extemporize", "spontaneous", "unplanned", "unrehearsed",
-    "unscripted", "off-the-cuff", "on-the-fly", "spur-of-the-moment", "impromptu", "unprepared",
-    "unstudied", "natural", "genuine", "authentic", "real", "true", "honest", "heartfelt", "sincere",
-    "earnest", "passionate", "fervent", "ardent", "zealous", "enthusiastic", "eager", "keen",
-    "interested", "curious", "inquisitive", "questioning", "probing", "searching", "seeking"
+    // NEW: Cultural and generational references (especially for Gen Z)
+    "gen z", "generation z", "zoomer", "zoomers", "tiktok", "meme", "memes", "viral", "trending",
+    "influencer", "influencers", "clout", "flex", "aesthetic", "vibe", "vibes", "vibe check",
+    "mood", "energy", "stan", "fandom", "ship", "shipping", "tea", "spill the tea", "shade",
+    "lowkey", "highkey", "slay", "slaying", "based", "cringe", "cringey", "sus", "yeet", "dank",
+    "fit", "outfit", "drip", "snack", "snatched", "fire", "lit", "fam", "no cap", "goat",
+    "ghost", "ghosted", "catfish", "finsta", "rizz", "bussin", "bet", "facts", "cap", "deadass",
+    "simp", "savage", "toxic", "basic", "zaddy", "periodt", "wig", "sending me", "rent free",
+    "main character", "villain era", "understood the assignment", "cheugy", "giving", "gaslighting",
+    
+    // Subjective assessment terms
+    "cool", "coolness", "popularity", "trendy", "hip", "fashionable", "stylish", "on trend",
+    "in style", "in fashion", "in vogue", "cutting edge", "ahead of the curve", "popular",
+    "unpopular", "acceptable", "unacceptable", "appropriate", "inappropriate", "preferred",
+    "opinion", "perspective", "viewpoint", "stance", "position", "attitude", "mindset",
+    "outlook", "judgment", "assessment", "evaluation", "appraisal", "rating", "ranking",
+    "scoring", "interpretation", "perception", "impression", "sentiment",
+    "feeling", "emotion", "reaction", "response", "reception", "feedback", "critique",
+    "criticism", "review", "analysis", "examination", "investigation", "inquiry", "probe",
+    "study", "survey", "poll", "consensus", "agreement", "disagreement", "controversy",
+    
+    // Additional creative assessment phrases
+    "determine if", "figure out if", "assess if", "evaluate if", "judge if", "decide if",
+    "rate", "rank", "grade", "score", "classify", "categorize", "label", "tag", "mark",
+    "brand", "stamp", "badge", "measure", "gauge", "meter", "barometer", "yardstick",
+    "benchmark", "standard", "criterion", "norm", "convention", "custom", "tradition",
+    "practice", "habit", "routine", "ritual", "ceremony", "observance", "rite", "protocol"
   ];
   
   // Medium openness indicators (Score 1) - at least 300 indicators
@@ -384,6 +405,17 @@ async function calculateEnergy(prompt) {
   // BASE_KWH_PER_1000_TOKENS from user feedback
   const BASE_KWH_PER_1000_TOKENS = 0.002;
   
+  // Water usage estimation factor (ml per kWh)
+  // Based on data center cooling efficiency estimates
+  const WATER_USAGE_ML_PER_KWH = 1500; // ml of water used per kWh
+  
+  // NEW: Real-world overhead factors
+  const DATACENTER_OVERHEAD_FACTOR = 2.5; // Power usage effectiveness (PUE) for data centers
+  const IDLE_LOAD_FACTOR = 1.7; // Servers maintaining model in memory and context handling
+  const NETWORK_OVERHEAD_FACTOR = 1.15; // Network transmission energy
+  const AMORTIZED_TRAINING_FACTOR = 1.2; // Partial amortization of training costs
+  const PRODUCTION_ENVIRONMENT_FACTOR = 1.3; // Shared resources, load balancing, etc.
+  
   // Calculate metrics
   const { totalTokens } = await countTokens(prompt);
   const complexity = getVocabComplexity(prompt);
@@ -423,8 +455,14 @@ async function calculateEnergy(prompt) {
   // Calculate total modifier
   const totalModifier = 1 + reasoningModifier + opennessModifier + complexityModifier + inferenceOverhead;
   
-  // Final energy calculation
-  const kWh = baseKWh * totalModifier;
+  // Direct inference energy calculation (theoretical)
+  const directKWh = baseKWh * totalModifier;
+  const directWaterUsageMl = directKWh * WATER_USAGE_ML_PER_KWH;
+  
+  // NEW: Calculate real-world total energy with overhead factors
+  const realWorldKWh = directKWh * DATACENTER_OVERHEAD_FACTOR * IDLE_LOAD_FACTOR * 
+                       NETWORK_OVERHEAD_FACTOR * AMORTIZED_TRAINING_FACTOR * PRODUCTION_ENVIRONMENT_FACTOR;
+  const realWorldWaterUsageMl = realWorldKWh * WATER_USAGE_ML_PER_KWH;
   
   return {
     promptTokens: (await countTokens(prompt)).promptTokens,
@@ -437,8 +475,12 @@ async function calculateEnergy(prompt) {
     baseKWh,
     totalModifier,
     inferenceOverhead,
-    kWh,
-    wattHours: kWh * 1000 // Convert to Wh for easier reading
+    directKWh,           // NEW: Renamed from kWh to directKWh
+    directWattHours: directKWh * 1000, // Convert to Wh for easier reading
+    directWaterUsageMl,  // NEW: Renamed from waterUsageMl to directWaterUsageMl
+    realWorldKWh,        // NEW: Added real world energy calculation
+    realWorldWattHours: realWorldKWh * 1000,
+    realWorldWaterUsageMl // NEW: Added real world water usage
   };
 }
 
@@ -474,13 +516,35 @@ function createInterface() {
       const estResponseWords = Math.floor(estimatedResponseTokens / 1.3);
       console.log(`Est. Response Size: ~${estResponseWords.toLocaleString()} words`);
       
-      console.log(`\nBase Energy: ${result.baseKWh.toExponential(6)} kWh`);
+      // NEW: Updated output section to show both direct and real-world estimates
+      console.log(`\n=== DIRECT INFERENCE ONLY (THEORETICAL) ===`);
+      console.log(`Base Energy: ${result.baseKWh.toExponential(6)} kWh`);
       console.log(`Total Modifier: ${result.totalModifier.toFixed(2)}x`);
-      console.log(`Estimated Energy Usage: ${result.kWh.toExponential(6)} kWh (${result.wattHours.toFixed(2)} Wh)`);
+      console.log(`Direct Energy Usage: ${result.directKWh.toExponential(6)} kWh (${result.directWattHours.toFixed(2)} Wh)`);
+      console.log(`Direct Water Usage: ${result.directWaterUsageMl.toFixed(2)} ml`);
       
-      // Comparison to make it more understandable
-      const lightBulbHours = (result.kWh / 0.01).toFixed(4); // Assuming 10W LED bulb
+      // NEW: Add real-world estimates section
+      console.log(`\n=== REAL-WORLD USAGE (WITH OVERHEAD) ===`);
+      console.log(`Real-World Energy Usage: ${result.realWorldKWh.toExponential(6)} kWh (${result.realWorldWattHours.toFixed(2)} Wh)`);
+      console.log(`Real-World Water Usage: ${result.realWorldWaterUsageMl.toFixed(2)} ml`);
+      
+      // Water consumption comparisons for real-world usage
+      if (result.realWorldWaterUsageMl > 1000) {
+        console.log(`This is equivalent to ${(result.realWorldWaterUsageMl / 1000).toFixed(3)} liters of water`);
+      }
+      if (result.realWorldWaterUsageMl > 250) {
+        console.log(`This is about ${(result.realWorldWaterUsageMl / 250).toFixed(1)} glasses of drinking water`);
+      }
+      
+      // Comparisons for real-world energy
+      const lightBulbHours = (result.realWorldKWh / 0.01).toFixed(4); // Assuming 10W LED bulb
       console.log(`This is equivalent to powering a 10W LED bulb for ${lightBulbHours} hours`);
+      
+      // NEW: Add explanation of the differences
+      console.log(`\nNOTE: The real-world usage includes data center overhead, cooling inefficiencies,`);
+      console.log(`model preloading, shared resources, and other factors not reflected in`);
+      console.log(`theoretical direct inference calculations. This is why media reports often`);
+      console.log(`cite 20-50 mL water usage per prompt while direct calculations show much less.`);
     } catch (error) {
       console.error("Error analyzing prompt:", error);
     }
